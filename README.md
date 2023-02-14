@@ -1,4 +1,4 @@
-Enjoy video torrents in a a whole new way
+Enjoy video torrents in a whole new way
 
 ## Screenshots
 
@@ -20,9 +20,9 @@ On android it does not work ... for now.
 https://developer.fyne.io/started/
 3. Use the following commands to download, and build this source code: 
 ```bash
-git clone https://github.com/wetorrent/wetorrent
-cd wetorrent
-go build -o wetorrent
+git clone https://github.com/123movies-project/123movies
+cd 123movies
+go build -o 123movies
 ```
 
 ## Contributing
