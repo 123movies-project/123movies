@@ -3,8 +3,8 @@ Enjoy video torrents in a a whole new way
 ## Screenshots
 
 <p float="left">
-<img src="https://github.com/123movies-project/123movies/blob/main/pic1.png" width="45%">
-<img src="https://github.com/123movies-project/123movies/blob/main/pic2.png" width="45%">
+<img src="https://github.com/123movies-project/123movies/blob/master/pic1.png" width="45%">
+<img src="https://github.com/123movies-project/123movies/blob/master/pic2.png" width="45%">
 </p>
 
 
