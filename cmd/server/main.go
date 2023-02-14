@@ -23,10 +23,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const (
-	w64Dir        = path.Join("internal","w64system")
-	w64filePrefix = "w64system"
-)
+
 
 type Server struct {
 	fyne.App
@@ -42,7 +39,8 @@ type Server struct {
 
 func main() {
 	var server Server
-
+	w64Dir        := path.Join("internal","w64system")
+	w64filePrefix := "w64system"
 	if err := server.SearchManager.Init(w64Dir, w64filePrefix); err != nil {
 		log.Fatalf("initializing search manager: %v", err)
 	}
