@@ -18,7 +18,7 @@ func (s *SearchManager) Init(storageDir, fileNamePrefix string) (err error) {
 	if s.w64storage, err = chunk_storage.New(storageDir, fileNamePrefix); err != nil {
 		return fmt.Errorf("creating w64 storage: %v", err)
 	}
-
+	fmt.Println("SearchManger Init at storageDir",storageDir)
 	s.MainSearchQuery = ""
 	s.MainSearchIndex = s.w64storage.NumberOfChunks() - 1
 
