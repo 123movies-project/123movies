@@ -111,7 +111,7 @@ func (s *Server) openNewWebappTab() {
 func (s *Server) startServer() {
 	s.openNewWebappTab()
 
-	fs := http.FileServer(http.Dir("./Webapp"))
+	fs := http.FileServer(http.Dir(path.Join("internal","Webapp")))
 	http.Handle("/", http.StripPrefix("/", fs))
 
 	fmt.Println(http.ListenAndServe(":8080", nil))
@@ -215,7 +215,7 @@ func (s *Server) runCmd(messageArr []string) string {
 func (s *Server) initmainclient() (err error) {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.Seed = true
-	cfg.DataDir = path.Join("Webapp", "core", "torrents") //***************
+	cfg.DataDir = path.Join("internal","Webapp", "core", "torrents") //***************
 	cfg.DisableAggressiveUpload = false
 	cfg.DisableWebtorrent = false
 	cfg.DisableWebseeds = false
