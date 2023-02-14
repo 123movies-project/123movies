@@ -255,144 +255,51 @@ func (s *Server) SetMainTorrent(magnet string) {
 	}
 }
 func (s *Server) addtorrent(tmpname string, tmpdescription string, tmpmagneturi string) {
-	/*
-		tmpmagnet,perr:=metainfo.ParseMagnetUri(tmpmagneturi)
-		//_=perr
-		if perr != nil {
-			log.Print("new torrent parsing error: %w", perr)
-			//return //fmt.Errorf("new torrent client: %w", err)
-		}
-	*/
 	t, err := s.AddMagnet(tmpmagneturi)
 	if err != nil {
 		log.Print("new torrent error: %w", err)
-		//return //fmt.Errorf("new torrent client: %w", err)
 	}
-	/*
-		t,ok:=mainclient.Torrent(tmpmagnet.InfoHash)
-		//_=ok
-		if (!ok) {
-			log.Print("new torrent error ")
-			return
-			//return //fmt.Errorf("new torrent client: %w", err)
-		}
-	*/
-	//
-	/*
-	   	mms := storage.NewMMap("Webapp/core/torrents")
-	   	defer mms.Close()
-	   	tspec,perr:=torrent.TorrentSpecFromMagnetUri(tmpmagneturi)
-	    	_=perr
-	   	log.Printf("torrent spec",tspec)
-	   	tspec.Storage=mms//:   mms
-	   	log.Printf("torrent spec",tspec)
-	   	t, new, err := mainclient.AddTorrentSpec(tspec)
-	   	_=new
-	   	_=err
-
-	   	if err != nil {
-	   		log.Print("new torrent error: %w", err)
-	   		//return //fmt.Errorf("new torrent client: %w", err)
-	   	}
-	*/
-	//
-	//t, _ := mainclient.AddMagnet(tmpmagneturi)
 
 	<-t.GotInfo()
+
 	log.Printf("added magnet %s\n", tmpmagneturi)
-	//t.DownloadAll()
-	//mainclient.WaitAll()
-	//selectedfilepath:="[TorrentCouch.com].Tom.Clancys.Jack.Ryan.S01.Complete.720p.WEB-DL.x264.[4.3GB].[MP4].[Season.1.Full]/[TorrentCouch.com].Tom.Clancys.Jack.Ryan.S01E04.720p.WEB-DL.x264.mp4"
-	//Prioritize(tmpmagneturi,selectedfilepath)
-	//
 	files := t.Files()
 	totalsize := int64(0)
 	tmppreviewfile := ""
 	tmppreviewfilesize := int64(0)
-	//tmppreviewfilei:=0
+
 	for _, filei := range files {
 		if (filei.Length() > tmppreviewfilesize) && (strings.Contains(filei.Path(), ".mp4")) {
 			tmppreviewfile = filei.Path()
 			totalsize += filei.Length()
-			//tmppreviewfilei=index
 		}
 	}
 
 	for _, filei := range files {
-		//fmt.Printf("**file %d path %s progress %d %% \n", i,filei.Path(), filei.BytesCompleted()*100/filei.Length())
-		/*
-			if filepath==filei.Path() {
-				filei.SetPriority(torrent.PiecePriorityNormal)
-			} else {
-				filei.SetPriority(torrent.PiecePriorityNone)
-			}*/
-		//filei.SetPriority(torrent.PiecePriorityNone)
-		//if ((filei.Length()>tmppreviewfilesize)&&(strings.Contains(filei.Path(), ".mp4"))){
 		if tmppreviewfile == filei.Path() {
-			//tmppreviewfile=filei.Path()
-			//////////////////////////////////////
-
-			//lastprioritizedpiece:=CustomMax(int((filei.EndPieceIndex()-filei.BeginPieceIndex())/10)+int(filei.BeginPieceIndex()),int(filei.EndPieceIndex()))
-
 			firstprioritizedpiece := int(filei.BeginPieceIndex())
 			lastprioritizedpiece := CustomMin(firstprioritizedpiece+20, int(filei.EndPieceIndex()))
-			//for i :=firstprioritizedpiece; i < lastprioritizedpiece; i++ {
-			//	t.Piece(i).SetPriority(torrent.PiecePriorityHigh)
-			//}
-			//for i :=lastprioritizedpiece; i < int(filei.EndPieceIndex()); i++ {
-			//	t.Piece(i).SetPriority(torrent.PiecePriorityNone)
-			//}
+
 			t.DownloadPieces(firstprioritizedpiece, lastprioritizedpiece)
 			t.CancelPieces(lastprioritizedpiece, filei.EndPieceIndex())
-
-			//////////////////////////////////////
-			//filei.SetPriority(torrent.PiecePriorityNone)
-
 		} else {
 			filei.SetPriority(torrent.PiecePriorityNone)
 		}
-
-		/////////t.CancelPieces(filei.BeginPieceIndex(),filei.EndPieceIndex())
 	}
 
-	//if tmppreviewfile==""{
-	//	return
-	//}
-	//Prioritize(tmpmagneturi,tmppreviewfile)
 	AddPreviewingTorrent(tmpmagneturi)
-	//time.Sleep(60 * time.Second)
 	AddSearchResultItem(tmpname+" "+PrettyBytes(totalsize), tmpdescription, tmpmagneturi, tmppreviewfile)
 
 	for {
-		//Prioritize(tmpmagneturi,MainFile)
-		//DisplayTorrentInfo(tmpmagneturi)
 		if (!IsSavedItemWithMagnet(tmpmagneturi)) && (!s.IsMainTorrent(tmpmagneturi)) && (!IsPreviewingTorrent(tmpmagneturi)) {
 			log.Println("Torrent removed", tmpmagneturi)
 			t.Drop()
 			return
 		}
-		//if files[tmppreviewfilei]
 		time.Sleep(8 * time.Second)
 	}
-
-	time.Sleep(1 * time.Second)
-	log.Println("Torrent downloaded")
 }
 
-/*
-func DisplayTorrentInfo(tmpmagneturi string){
-		tmpmagnet,perr:=metainfo.ParseMagnetUri(tmpmagneturi)
-		_=perr
-		t,ok:=mainclient.Torrent(tmpmagnet.InfoHash)
-		_=ok
-
-		files:=t.Files()
-			for i, filei := range files {
-				fmt.Printf("**file %d path %s progress %d %% \n", i,filei.Path(), filei.BytesCompleted()*100/filei.Length())
-			}
-		fmt.Printf("***\n")
-
-}*/
 func (s *Server) getIsSavedItemResponse(tmpitemmagnet string) string {
 	var tmpreturnstring = "ISSAVEDITEM*" + tmpitemmagnet
 
@@ -406,36 +313,38 @@ func (s *Server) getIsSavedItemResponse(tmpitemmagnet string) string {
 
 }
 func (s *Server) getTorrentInfoResponse(tmpmagneturi string) string {
-
 	fmt.Printf("REQUESTTORRENTINFO %s \n", tmpmagneturi)
 	var tmpreturnstring = "TORRENTINFO"
 	tmpmagnet, perr := metainfo.ParseMagnetUri(tmpmagneturi)
 	_ = perr
+
 	if perr != nil {
 		return ""
 	}
+
 	t, ok := s.Torrent(tmpmagnet.InfoHash)
-	_ = ok
 	if !ok {
 		return ""
 	}
+
 	if t == nil {
 		return ""
 	}
+
 	if t.Info() == nil {
 		return ""
 	}
+
 	files := t.Files()
 	if files == nil {
 		return ""
 	}
+
 	tmpreturnstring += "*" + tmpmagneturi
 	tmpreturnstring += "*" + "TORRENTNAME"
 	tmpreturnstring += "*" + fmt.Sprintf("%d", len(t.PeerConns())) //"333"//nbpeers
-	//tmpreturnstring+="*"+fmt.Sprintf("%d",len(files))
 
 	for _, filei := range files {
-		//fmt.Printf("**file %d path %s progress %d %% \n", i,filei.Path(), filei.BytesCompleted()*100/filei.Length())
 		tmpreturnstring += "*" + fmt.Sprintf("%s*%d", filei.Path(), filei.BytesCompleted()*100/filei.Length())
 	}
 	fmt.Printf("*** %s\n", tmpreturnstring)
@@ -453,7 +362,6 @@ func (s *Server) Prioritize(tmpmagneturi string, filepath string) {
 
 	files := t.Files()
 	for _, filei := range files {
-		//fmt.Printf("**file %d path %s progress %d %% \n", i,filei.Path(), filei.BytesCompleted()*100/filei.Length())
 		if filepath == filei.Path() {
 			filei.SetPriority(torrent.PiecePriorityNormal)
 		} else {
@@ -463,42 +371,11 @@ func (s *Server) Prioritize(tmpmagneturi string, filepath string) {
 	fmt.Printf("***\n")
 }
 
-///////////////////////////
 func (s *Server) IsMainTorrent(magnet string) bool {
 	return s.MainTorrent == magnet
 
 }
 
-/////////////////////////
-/*
-var SavedItems []string
-func IsSavedItemWithMagnet(itempath string) bool{
-	return  false
-}
-//func IsSavedItem(itempath string) bool{
-func IsSavedItem(magnet string) bool{
-	for _, tmpe:= range SavedItems {
-		if tmpe==magnet {
-    			return true
-		}
-	}
-	return false
-}
-func AddSavedItem(itempath string){
-	SavedItems=append(SavedItems,itempath)
-}
-func RemoveSavedItem(itempath string){
-	SavedItems=removefromslice(SavedItems,itempath)
-}
-func removefromslice(slice []string, s string) []string {
-	for i, tmpe:= range slice {
-		if tmpe==s {
-    	return append(slice[:i], slice[i+1:]...)
-		}
-	}
-	return slice
-}
-*/
 type SettingsType struct {
 	LocalHostPort int
 	SavedItems    []ItemType
@@ -537,19 +414,12 @@ func (s *Server) GetSearchResult(index int) string {
 	if len(SearchResults) <= index {
 		return "NOSEARCHRESULTFOUND"
 	}
-	//for i := 0; i <len(SearchResults) ; i++ {
+
 	tmpsearchresultstring += "*" + SearchResults[index].Name
 	tmpsearchresultstring += "*" + SearchResults[index].Description
 	tmpsearchresultstring += "*" + SearchResults[index].Magnet
 	tmpsearchresultstring += "*" + SearchResults[index].PreviewFile
-	//}
-	/*
-		if len(SearchResults)==1{
-			EmptySearchResults()
-		} else {
-			SearchResults=SearchResults[1:]
-		}
-	*/
+
 	return tmpsearchresultstring
 }
 func EmptySearchResults() {
@@ -598,8 +468,6 @@ func SaveSettings() {
 
 }
 
-/////////////////////////////////
-//PreviewingTorrentMagnetArr
 func AddPreviewingTorrent(tmpmagnet string) {
 	PreviewingTorrentMagnetArr = append(PreviewingTorrentMagnetArr, tmpmagnet)
 }
@@ -623,7 +491,7 @@ func IsSavedItemWithMagnet(magnet string) bool {
 
 func (s *Server) AddSavedItem(itemname string, itemdescription string, itemmagnet string, itempreviewfile string) {
 	var tmpsaveditem ItemType
-	//tmpsaveditem.Path=itempath
+
 	tmpsaveditem.Name = itemname
 	tmpsaveditem.Description = itemdescription
 	tmpsaveditem.Magnet = itemmagnet
