@@ -612,9 +612,6 @@ func IsPreviewingTorrent(magnet string) bool {
 	return false
 }
 
-/////////////////////////////////
-
-//var SavedItems []SavedItemType
 func IsSavedItemWithMagnet(magnet string) bool {
 	for _, tmpe := range Settings.SavedItems {
 		if tmpe.Magnet == magnet {
@@ -624,16 +621,6 @@ func IsSavedItemWithMagnet(magnet string) bool {
 	return false
 }
 
-/*
-func IsSavedItem(itempath string) bool{
-	for _, tmpe:= range Settings.SavedItems {
-		if tmpe.Path==itempath {
-    			return true
-		}
-	}
-	return false
-}
-*/
 func (s *Server) AddSavedItem(itemname string, itemdescription string, itemmagnet string, itempreviewfile string) {
 	var tmpsaveditem ItemType
 	//tmpsaveditem.Path=itempath
