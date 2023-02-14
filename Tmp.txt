@@ -1,0 +1,73 @@
+go mod init gotorrent-test
+
+go get fyne.io/fyne/v2
+go mod tidy
+
+
+go get github.com/anacrolix/torrent
+
+sudo ./fc windows -arch=amd64 -tags=disable_libutp
+
+sudo ./fc android -arch=* -app-id=test.myapptest.com -icon ./Icons/appicon.png -tags=disable_libutp
+
+///////////////////////
+
+
+You have built an .exe file that depends on libwinpthread-1.dll.
+
+Solutions to make sure the .exe can run:
+
+    Add the MinGW bin path to your PATH so libwinpthread-1.dll - this would only fix it for your own system so I wouldn't recommend this if you want to use the .exe file on other systems.
+    Copy libwinpthread-1.dll from MinGW in the same folder as your .exe file. This is generally needed for any shared dependancy library your .exe is linked against.
+    Build a static .exe (--static linker flag) to avoid the shared (.dll) dependancy.
+
+/////////////////////////
+export ANDROID_NDK_HOME=~/Android-ndk/android-ndk-r25b
+
+./fyne-cmd package -os android -appID com.test.myapp -icon ./Icons/appicon.png -tags=disable_libutp
+
+///////////////////////
+apt-get install gcc-multilib
+apt-get install gcc-mingw-w64
+///////////////////
+g++: error: unrecognized command-line option '-mthreads'; did you mean '-pthread'? 
+///////////////////
+sudo apt install g++-mingw-w64-x86-64
+go env -w "CXX=x86_64-w64-mingw32-g++"
+///////////////////
+sudo ./fc windows -arch=amd64 -env="CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=/usr/bin/x86_64-w64-mingw32-gcc"
+
+sudo apt-get install gcc libgl1-mesa-dev xorg-dev
+///////////////////
+sudo ./fc windows -arch=amd64 -env="CXX=x86_64-w64-mingw32-g++"wher
+///////////////////
+
+    export ANDROID_NDK_HOME=D:\SDK\ndk\19.2.5345600
+    go mod tidy
+    fyne package -os android
+/////////////////
+
+download ndk from:
+https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+
+export ANDROID_NDK_HOME=~/Android-ndk/android-ndk-r25b
+
+gedit ~/.bashrc
+
+source ~/.bashrc
+
+fyne package -os android -appID com.example.myapp -icon ./Icons/appicon.png
+
+
+fyne package -os android -appID com.test.myapp -icon ./Icons/appicon.png
+
+********************************
+go run -tags mobile .
+
+**********************
+gedit .gitignore
+************************
+Wrong !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+export ANDROID_HOME="/root/Android/Sdk"
+export ANDROID_NDK_HOME="/root/Android/Sdk/ndk"
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
