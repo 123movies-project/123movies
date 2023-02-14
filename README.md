@@ -22,7 +22,7 @@ https://developer.fyne.io/started/
 ```bash
 git clone https://github.com/123movies-project/123movies
 cd 123movies
-go build -o 123movies
+go build -o ./cmd/server
 ```
 
 ## Contributing

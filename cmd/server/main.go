@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	w64Dir        = "w64system"
+	w64Dir        = path.Join("internal","w64system")
 	w64filePrefix = "w64system"
 )
 
