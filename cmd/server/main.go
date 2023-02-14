@@ -3,67 +3,77 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"time"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
+
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/gorilla/websocket"
-	"log"
-	"net/http"
-	"path"
-	"strings"
-	//"fyne.io/fyne/v2/canvas"
-	"net/url"
-	"os"
-	"strconv"
-	"time"
-	//"github.com/anacrolix/torrent/storage"
 )
 
-var upgrader = websocket.Upgrader{}
+const (
+	w64Dir        = "w64system"
+	w64filePrefix = "w64system"
+)
 
-var mainapp fyne.App
+type Server struct {
+	fyne.App
+	websocket.Upgrader
+	*torrent.Client
 
-var MainTorrent string //magnet
-var MainFile string    //filepath
-var AppIsClosing bool
+	SearchManager
+
+	MainTorrent  string
+	MainFile     string
+	AppIsClosing bool
+}
 
 func main() {
-	InitSearchManager()
-	mainapp = app.New()
-	mainapp.Settings().SetTheme(&myTheme{})
-	mainapp.SetIcon(resourceAppiconPng)
-	mainwin := mainapp.NewWindow("123movies")
+	var server Server
+
+	if err := server.SearchManager.Init(w64Dir, w64filePrefix); err != nil {
+		log.Fatalf("initializing search manager: %v", err)
+	}
+
+	server.App = app.New()
+	server.App.Settings().SetTheme(&myTheme{})
+	server.App.SetIcon(resourceAppiconPng)
+
+	mainwin := server.App.NewWindow("123movies")
 	mainwin.Resize(fyne.NewSize(400, 710))
 
-	go startWebsocket()
-	go startServer()
-	AppIsClosing = false
-	go initmainclient()
-	LoadSettings()
-	//time.Sleep(10*time.Second)
-	//go SetMainTorrent("magnet:?xt=urn:btih:D7A46713EAEE18C746B3254B7D1492A50FD9D6CE&dn=The+Matrix+%281999%29+%5B1080p%5D+%5BYTS.MX%5D&tr=udp%3A%2F%2Fglotorrents.pw%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A80&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Fp4p.arenabg.ch%3A1337&tr=udp%3A%2F%2Ftracker.internetwarriors.net%3A1337")
-	//SetMainFile("The Matrix (1999) [1080p]/The.Matrix.1999.1080p.BrRip.x264.YIFY.mp4")
-	//go addtorrent("magnet:?xt=urn:btih:D7A46713EAEE18C746B3254B7D1492A50FD9D6CE&dn=The+Matrix+%281999%29+%5B1080p%5D+%5BYTS.MX%5D&tr=udp%3A%2F%2Fglotorrents.pw%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A80&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Fp4p.arenabg.ch%3A1337&tr=udp%3A%2F%2Ftracker.internetwarriors.net%3A1337")
-	//w.SetContent(widget.NewLabel("app is live ..."))
+	go server.startWebsocket()
+	go server.startServer()
+	server.AppIsClosing = false
+
+	go server.initmainclient()
+	server.LoadSettings()
+
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Home", homeScreen(mainwin)),
+		container.NewTabItem("Home", server.homeScreen(mainwin)),
 		//container.NewTabItem("Settings",  settingsScreen(myWindow)),
 	)
 
 	tabs.SetTabLocation(container.TabLocationTop)
-
 	mainwin.SetContent(tabs)
+	mainwin.ShowAndRun() // dwell until exit
 
-	mainwin.ShowAndRun()
-	AppIsClosing = true
-
+	server.AppIsClosing = true
 }
 
-func homeScreen(win fyne.Window) fyne.CanvasObject {
+func (s *Server) homeScreen(win fyne.Window) fyne.CanvasObject {
 	data := binding.BindStringList(
 		//&[]string{"Item 1", "Item 2", "Item 3"},
 		&[]string{},
@@ -80,112 +90,121 @@ func homeScreen(win fyne.Window) fyne.CanvasObject {
 	add := widget.NewButton("Open New Webapp Tab", func() {
 		//val := fmt.Sprintf("Item %d", data.Length()+1)
 		//data.Append(val)
-		openNewWebappTab()
-
+		s.openNewWebappTab()
 	})
+
 	return container.NewBorder(add, nil, nil, nil, list)
 }
 
-func openNewWebappTab() {
+func (s *Server) openNewWebappTab() {
 	u, err := url.Parse("http://localhost:8080/core/core.html")
-	_ = err
-	mainapp.OpenURL(u) //
+	if err != nil {
+		fmt.Printf("parsing URL: %v", err)
+	}
 
+	err = s.App.OpenURL(u)
+	if err != nil {
+		fmt.Printf("opening URL: %v", err)
+	}
 }
 
-func startServer() {
-	openNewWebappTab()
+func (s *Server) startServer() {
+	s.openNewWebappTab()
 
-	//
 	fs := http.FileServer(http.Dir("./Webapp"))
 	http.Handle("/", http.StripPrefix("/", fs))
 
 	fmt.Println(http.ListenAndServe(":8080", nil))
-
 }
 
-func startWebsocket() {
-	http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
-		// Upgrade upgrades the HTTP server connection to the WebSocket protocol.
-		conn, err := upgrader.Upgrade(w, r, nil)
+func (s *Server) startWebsocket() {
+	http.HandleFunc("/websocket", s.handleWebSocket)
+}
+
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Upgrade upgrades the HTTP server connection to the WebSocket protocol.
+	conn, err := s.Upgrade(w, r, nil)
+	if err != nil {
+		log.Print("upgrade failed: ", err)
+		return
+	}
+
+	defer conn.Close()
+
+	// Continuosly read and write message
+	for {
+		mt, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Print("upgrade failed: ", err)
-			return
+			log.Println("read failed:", err)
+			//break
+			//App.Quit()
 		}
-		defer conn.Close()
+		messagestring := string(message)
+		messageArr := strings.Split(messagestring, "*")
+		log.Println("got:", messagestring)
 
-		// Continuosly read and write message
-		for {
-			mt, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("read failed:", err)
-				//break
-				//mainapp.Quit()
-			}
-			messagestring := string(message)
-			messageArr := strings.Split(messagestring, "*")
-			log.Println("got:", messagestring)
-
-			returnmessagestring := runCmd(messageArr) //[]byte("return message")
-			err = conn.WriteMessage(mt, []byte(returnmessagestring))
-			if err != nil {
-				log.Println("write failed:", err)
-				//break
-			}
+		returnmessagestring := s.runCmd(messageArr) //[]byte("return message")
+		err = conn.WriteMessage(mt, []byte(returnmessagestring))
+		if err != nil {
+			log.Println("write failed:", err)
+			//break
 		}
-	})
-
+	}
 }
 
-func runCmd(messageArr []string) string {
+type ServerCommand = string
 
+const (
+	GetSearchResult    ServerCommand = "GETSEARCHRESULT"
+	SetSearchQuery                   = "SETSEARCHQUERY"
+	SetMainTorrent                   = "SETMAINTORRENT"
+	SetMainFile                      = "SETMAINFILE"
+	AddSavedItem                     = "ADDSAVEDITEM"
+	RemoveSavedItem                  = "REMOVESAVEDITEM"
+	RequestTorrentInfo               = "REQUESTTORRENTINFO"
+	RequestIsSavedItem               = "REQUESTISSAVEDITEM"
+)
+
+func (s *Server) runCmd(messageArr []string) string {
 	if len(messageArr) == 0 {
-		fmt.Println("Unkown command")
 		return "Unkown command"
 	}
-	fmt.Println("got request %s", messageArr[0])
+
 	switch messageArr[0] {
-	case "GETSEARCHRESULT":
+	case GetSearchResult:
 		tmpint, cierr := strconv.Atoi(messageArr[1])
 		if cierr != nil {
 			return "Unkown command"
 		}
+
 		if tmpint >= len(SearchResults) {
-			go MoreSearchResults()
+			go s.MoreSearchResults(s)
 			return "SEARCHRESULTNOTFOUND"
 		}
-		return GetSearchResult(tmpint)
+
+		return s.GetSearchResult(tmpint)
 	//setSearchQuery
-	case "SETSEARCHQUERY":
+	case SetSearchQuery:
 		PreviewingTorrentMagnetArr = PreviewingTorrentMagnetArr[:0]
 		EmptySearchResults()
-		go SetSearchQuery(messageArr[1])
-	case "SETMAINTORRENT":
-		fmt.Println("got cmd SETMAINTORRENT")
-		//
-		//go SetMainTorrent(messageArr[1],messageArr[2],messageArr[3])
-		SetMainTorrent(messageArr[1])
+		go s.SetSearchQuery(s, messageArr[1])
+	case SetMainTorrent:
+		s.SetMainTorrent(messageArr[1])
 		if len(messageArr) > 2 {
-			SetMainFile(messageArr[2])
+			s.SetMainFile(messageArr[2])
 		}
-	case "SETMAINFILE":
-		fmt.Println("got cmd SETMAINFILE")
-		//
-		SetMainFile(messageArr[1])
-	case "ADDSAVEDITEM":
-		fmt.Println("got cmd ADDSAVEDITEM")
-		//
-		AddSavedItem(messageArr[1], messageArr[2], messageArr[3], messageArr[4])
-	case "REMOVESAVEDITEM":
-		fmt.Println("got cmd REMOVESAVEDITEM")
-		//
-		RemoveSavedItem(messageArr[1])
-	case "REQUESTTORRENTINFO":
+	case SetMainFile:
+		s.SetMainFile(messageArr[1])
+	case AddSavedItem:
+		s.AddSavedItem(messageArr[1], messageArr[2], messageArr[3], messageArr[4])
+	case RemoveSavedItem:
+		s.RemoveSavedItem(messageArr[1])
+	case RequestTorrentInfo:
 		if len(messageArr) > 1 {
-			return getTorrentInfoResponse(messageArr[1])
+			return s.getTorrentInfoResponse(messageArr[1])
 		}
-	case "REQUESTISSAVEDITEM":
-		return getIsSavedItemResponse(messageArr[1])
+	case RequestIsSavedItem:
+		return s.getIsSavedItemResponse(messageArr[1])
 	default:
 		fmt.Println("Unkown command")
 	}
@@ -193,55 +212,49 @@ func runCmd(messageArr []string) string {
 	return "return message"
 }
 
-var mainclient *torrent.Client
-
-func initmainclient() {
-
+func (s *Server) initmainclient() (err error) {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.Seed = true
 	cfg.DataDir = path.Join("Webapp", "core", "torrents") //***************
-	//cfg.NoDHT = true
-	//cfg.DisableTCP = true
-	//cfg.DisableUTP = true
 	cfg.DisableAggressiveUpload = false
 	cfg.DisableWebtorrent = false
 	cfg.DisableWebseeds = false
-	var err error
-	mainclient, err = torrent.NewClient(cfg)
-	if err != nil {
+
+	if s.Client, err = torrent.NewClient(cfg); err != nil {
 		log.Print("new torrent client: %w", err)
 		return //fmt.Errorf("new torrent client: %w", err)
 	}
+
 	log.Print("new torrent client INITIATED")
-	for {
-		if AppIsClosing {
-			log.Print("closing mainclient")
-			mainclient.Close()
-		}
+
+	for !s.AppIsClosing {
 		time.Sleep(1 * time.Second)
 	}
-	//
-}
-func SetMainFile(tmpfilepath string) {
-	MainFile = tmpfilepath
-	Prioritize(MainTorrent, tmpfilepath)
+
+	log.Print("closing mainclient")
+	s.Client.Close()
+
+	return nil
 }
 
-//func SetMainTorrent(tmpname string,tmpdescription string,magnet string){
-func SetMainTorrent(magnet string) {
-	if (!IsMainTorrent(magnet)) && (!IsSavedItemWithMagnet(magnet)) {
-		MainTorrent = magnet
+func (s *Server) SetMainFile(tmpfilepath string) {
+	s.MainFile = tmpfilepath
+	s.Prioritize(s.MainTorrent, tmpfilepath)
+}
+
+func (s *Server) SetMainTorrent(magnet string) {
+	if (!s.IsMainTorrent(magnet)) && (!IsSavedItemWithMagnet(magnet)) {
+		s.MainTorrent = magnet
+
 		for {
-
-			if (mainclient != nil) && (!AppIsClosing) {
+			if (s.Client != nil) && (!s.AppIsClosing) {
 				break
 			}
 			time.Sleep(1 * time.Second)
 		}
-		//addtorrent(tmpname,tmpdescription,magnet)
 	}
 }
-func addtorrent(tmpname string, tmpdescription string, tmpmagneturi string) {
+func (s *Server) addtorrent(tmpname string, tmpdescription string, tmpmagneturi string) {
 	/*
 		tmpmagnet,perr:=metainfo.ParseMagnetUri(tmpmagneturi)
 		//_=perr
@@ -250,7 +263,7 @@ func addtorrent(tmpname string, tmpdescription string, tmpmagneturi string) {
 			//return //fmt.Errorf("new torrent client: %w", err)
 		}
 	*/
-	t, err := mainclient.AddMagnet(tmpmagneturi)
+	t, err := s.AddMagnet(tmpmagneturi)
 	if err != nil {
 		log.Print("new torrent error: %w", err)
 		//return //fmt.Errorf("new torrent client: %w", err)
@@ -353,7 +366,7 @@ func addtorrent(tmpname string, tmpdescription string, tmpmagneturi string) {
 	for {
 		//Prioritize(tmpmagneturi,MainFile)
 		//DisplayTorrentInfo(tmpmagneturi)
-		if (!IsSavedItemWithMagnet(tmpmagneturi)) && (!IsMainTorrent(tmpmagneturi)) && (!IsPreviewingTorrent(tmpmagneturi)) {
+		if (!IsSavedItemWithMagnet(tmpmagneturi)) && (!s.IsMainTorrent(tmpmagneturi)) && (!IsPreviewingTorrent(tmpmagneturi)) {
 			log.Println("Torrent removed", tmpmagneturi)
 			t.Drop()
 			return
@@ -380,7 +393,7 @@ func DisplayTorrentInfo(tmpmagneturi string){
 		fmt.Printf("***\n")
 
 }*/
-func getIsSavedItemResponse(tmpitemmagnet string) string {
+func (s *Server) getIsSavedItemResponse(tmpitemmagnet string) string {
 	var tmpreturnstring = "ISSAVEDITEM*" + tmpitemmagnet
 
 	if IsSavedItemWithMagnet(tmpitemmagnet) {
@@ -392,7 +405,7 @@ func getIsSavedItemResponse(tmpitemmagnet string) string {
 	return tmpreturnstring
 
 }
-func getTorrentInfoResponse(tmpmagneturi string) string {
+func (s *Server) getTorrentInfoResponse(tmpmagneturi string) string {
 
 	fmt.Printf("REQUESTTORRENTINFO %s \n", tmpmagneturi)
 	var tmpreturnstring = "TORRENTINFO"
@@ -401,7 +414,7 @@ func getTorrentInfoResponse(tmpmagneturi string) string {
 	if perr != nil {
 		return ""
 	}
-	t, ok := mainclient.Torrent(tmpmagnet.InfoHash)
+	t, ok := s.Torrent(tmpmagnet.InfoHash)
 	_ = ok
 	if !ok {
 		return ""
@@ -429,10 +442,10 @@ func getTorrentInfoResponse(tmpmagneturi string) string {
 	return tmpreturnstring
 }
 
-func Prioritize(tmpmagneturi string, filepath string) {
+func (s *Server) Prioritize(tmpmagneturi string, filepath string) {
 	tmpmagnet, perr := metainfo.ParseMagnetUri(tmpmagneturi)
 	_ = perr
-	t, ok := mainclient.Torrent(tmpmagnet.InfoHash)
+	t, ok := s.Torrent(tmpmagnet.InfoHash)
 	_ = ok
 	if !ok {
 		return
@@ -451,8 +464,8 @@ func Prioritize(tmpmagneturi string, filepath string) {
 }
 
 ///////////////////////////
-func IsMainTorrent(magnet string) bool {
-	return MainTorrent == magnet
+func (s *Server) IsMainTorrent(magnet string) bool {
+	return s.MainTorrent == magnet
 
 }
 
@@ -519,7 +532,7 @@ func AddSearchResultItem(tmpname string, tmpdescription string, tmpmagneturi str
 	SearchResults = append(SearchResults, *NewItem)
 
 }
-func GetSearchResult(index int) string {
+func (s *Server) GetSearchResult(index int) string {
 	var tmpsearchresultstring = "SEARCHRESULT"
 	if len(SearchResults) <= index {
 		return "NOSEARCHRESULTFOUND"
@@ -547,7 +560,7 @@ func LoadDefaultSettings() {
 
 }
 
-func LoadSettings() {
+func (s *Server) LoadSettings() {
 	SettingsBytes, err := os.ReadFile("Settings.json") // just pass the file name
 	if err != nil {
 		fmt.Println("error:", err)
@@ -621,7 +634,7 @@ func IsSavedItem(itempath string) bool{
 	return false
 }
 */
-func AddSavedItem(itemname string, itemdescription string, itemmagnet string, itempreviewfile string) {
+func (s *Server) AddSavedItem(itemname string, itemdescription string, itemmagnet string, itempreviewfile string) {
 	var tmpsaveditem ItemType
 	//tmpsaveditem.Path=itempath
 	tmpsaveditem.Name = itemname
@@ -631,11 +644,11 @@ func AddSavedItem(itemname string, itemdescription string, itemmagnet string, it
 
 	Settings.SavedItems = append(Settings.SavedItems, tmpsaveditem)
 }
-func RemoveSavedItem(itemmagnet string) {
+func (s *Server) RemoveSavedItem(itemmagnet string) {
 
-	Settings.SavedItems = removefromsaveditems(Settings.SavedItems, itemmagnet)
+	Settings.SavedItems = s.removefromsaveditems(Settings.SavedItems, itemmagnet)
 }
-func removefromsaveditems(slice []ItemType, itemmagnet string) []ItemType {
+func (s *Server) removefromsaveditems(slice []ItemType, itemmagnet string) []ItemType {
 	for i, tmpe := range slice {
 		if tmpe.Magnet == itemmagnet {
 			return append(slice[:i], slice[i+1:]...)
