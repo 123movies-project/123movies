@@ -39,7 +39,13 @@ type Server struct {
 
 func main() {
 	var server Server
-	w64Dir        := path.Join("internal","w64system")
+	pwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	fmt.Println(pwd)
+	w64Dir        := path.Join(pwd,"internal","w64system")
 	w64filePrefix := "w64system"
 	if err := server.SearchManager.Init(w64Dir, w64filePrefix); err != nil {
 		log.Fatalf("initializing search manager: %v", err)
